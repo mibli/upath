@@ -1,0 +1,154 @@
+#!/bin/bash
+
+replace_home_with_tilda() {
+  while read -r path; do
+    abs_path="$(realpath -qm "$path")"
+    rel_path="$(realpath -qm --relative-base "$HOME" "$abs_path")"
+    if [ "$abs_path" = "$rel_path" ]; then
+      echo "$abs_path"
+    else
+      # shellcheck disable=2088 # in this case I want literal ~
+      echo "~/$rel_path"
+    fi
+  done
+}
+
+shorten_word() {
+  if [[ "${#1}" -gt "$allow_len" ]]; then
+    echo "${1:0:$trim_len}"
+  else
+    echo "$1"
+  fi
+}
+
+compress_path() {
+  local path path_element path_elements first_element last_element length
+  while read -r path; do
+    # shellcheck disable=2162 # in this case -r will cause havoc
+    IFS=/ read -a path_elements <<<"$path"
+    length="${#path_elements[*]}"
+    first_element="${path_elements[0]}"
+    last_element="${path_elements[$((length - 1))]}"
+
+    # skip / if in home
+    if ! [ "$first_element" = "~" ]; then
+      printf "/"
+    fi
+
+    # shorten each part
+    for index in $(seq 0 $((length - 2))); do
+      path_element="${path_elements[$index]}"
+      if [ -n "$path_element" ]; then
+        printf "%s/" "$(shorten_word "$path_element")"
+      fi
+    done
+
+    # last element gets special treatment
+    if [ -n "$last_element" ]; then
+      printf "%s" "$(allow_len="$last_allow_len" trim_len="$last_allow_len" shorten_word "$last_element")"
+    fi
+    printf "\n"
+  done
+}
+
+expand_path() {
+  while read -r path; do
+    # shellcheck disable=2162 # in this case -r will cause havoc
+    IFS=/ read -a path_elements <<<"$path"
+    path=
+    for path_element in "${path_elements[@]}"; do
+
+      # expand tilda or append path elements
+      if [ -z "$path_element" ]; then
+        continue
+      elif [ -z "$path" ] && [ "$path_element" = "~" ]; then
+        path="$HOME"
+      else
+        path="$path/$path_element"
+      fi
+
+      # try to complete the path if it doesn't exist
+      if ! [ -e "$path" ]; then
+        globpath="$(compgen -G "$path*")"
+        if ! [ "$globpath" = "$path" ]; then
+          path="$globpath"
+        fi
+      fi
+    done
+    echo "$path"
+  done
+}
+
+trim_len=3
+last_allow_len=100
+calc_allow_len=true
+calc_allow_len_val=2
+expand=false
+
+print_help() {
+  cat <<EOL
+Usage: $0 [ [-t <trim-length>] [-a <allow-length>]) | -x | -h ] [<path>]
+
+Path compression utility, created mostly with prompts in mind.
+It can trim path elements to given sizes, with some wiggle room,
+and it can also expand these paths if they exist.
+
+If no path is provided, the application will attempt to capture standard input.
+
+Options:
+  -a    Set allow length, which is the max length before path element
+        is trimmed (default:<trim-length>+$calc_allow_len_val).
+  -h    Show this help
+  -l    Allowed length for last path element (default:$last_allow_len).
+  -t    Set trim length, the path elements will be trimmed to (default:$trim_len).
+  -x    Expand path (reverse of default compression)
+
+Examples:
+
+    $ $0 /home/user/repositories/tools/compath
+    ~/rep/tools/compath
+
+    $ $0 -t 2 /home/user/repositories/tools/compath
+    ~/re/to/compath
+
+    $ $0 -t 2 -a 5 /home/user/repositories/tools/compath
+    ~/re/tools/co
+
+    $ $0 -t 2 -a 5 -l 2 /home/user/repositories/tools/compath
+    ~/re/tools/co
+
+    $ $0 -x ~/rep/tools/com
+    /home/user/repositories/tools/compath
+EOL
+}
+
+while getopts "a:h?l:x?t:" opt; do
+  case $opt in
+    a) calc_allow_len=false
+       allow_len="$OPTARG" ;;
+    h) print_help ;;
+    l) last_allow_len="$OPTARG" ;;
+    t) trim_len="$OPTARG" ;;
+    x) expand=true ;;
+    ?) continue ;;
+  esac
+done
+
+if [ $OPTIND -ge 0 ]; then
+  shift "$((OPTIND - 1))"
+fi
+
+if $calc_allow_len; then
+  allow_len=$((trim_len + calc_allow_len_val))
+fi
+
+if [ -n "$1" ]; then
+  echo "$@"
+else
+  cat
+fi |
+  if $expand; then
+    expand_path
+  else
+    replace_home_with_tilda | compress_path | sed 's|/\.$||'
+  fi
