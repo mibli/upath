@@ -105,20 +105,20 @@ Options:
 
 Examples:
 
-    $ $0 /home/user/repositories/tools/compath
-    ~/rep/tools/compath
+    $ $0 /home/user/repositories/tools/upath
+    ~/rep/tools/upath
 
-    $ $0 -t 2 /home/user/repositories/tools/compath
-    ~/re/to/compath
+    $ $0 -t 2 /home/user/repositories/tools/upath
+    ~/re/to/upath
 
-    $ $0 -t 2 -a 5 /home/user/repositories/tools/compath
+    $ $0 -t 2 -a 5 /home/user/repositories/tools/upath
     ~/re/tools/co
 
-    $ $0 -t 2 -a 5 -l 2 /home/user/repositories/tools/compath
+    $ $0 -t 2 -a 5 -l 2 /home/user/repositories/tools/upath
     ~/re/tools/co
 
     $ $0 -x ~/rep/tools/com
-    /home/user/repositories/tools/compath
+    /home/user/repositories/tools/upath
 EOL
 }
 
